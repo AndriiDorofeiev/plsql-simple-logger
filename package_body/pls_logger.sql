@@ -1,0 +1,85 @@
+CREATE OR REPLACE EDITIONABLE PACKAGE BODY "PLS_LOGGER" AS
+
+    FUNCTION LOG_ERROR (
+        P_PROC_NAME IN VARCHAR2,
+        P_DIAGNOSTIC_LEVEL IN VARCHAR2 DEFAULT 'ERROR',
+        P_ADDITIONAL_PARAMETER IN VARCHAR2 DEFAULT NULL,
+        P_REQUEST IN CLOB DEFAULT NULL,
+        P_RESPONCE IN CLOB DEFAULT NULL
+    ) RETURN NUMBER AS
+        PRAGMA AUTONOMOUS_TRANSACTION;
+        L_REC PROCESS_MONITOR%ROWTYPE;
+        L_RET NUMBER;
+    BEGIN
+        L_REC.PROCESSNAME := P_PROC_NAME;
+        L_REC.DIAGNOSTIC_LEVEL := P_DIAGNOSTIC_LEVEL;
+        L_REC.ERROR_CODE := SQLCODE;
+        IF P_DIAGNOSTIC_LEVEL = ('INFO') THEN
+            L_REC.ERROR_TEXT := 'Ok';
+        ELSE
+            L_REC.ERROR_TEXT := SQLERRM;
+            L_REC.EXCEPTIONPATH := DBMS_UTILITY.FORMAT_ERROR_STACK
+                                   ||' '
+                                   ||CHR(10)
+                                   ||DBMS_UTILITY.FORMAT_ERROR_BACKTRACE;
+        END IF;
+
+        L_REC.ADDITIONAL_PARAMETERS := P_ADDITIONAL_PARAMETER;
+        L_REC.INSERT_TIME := SYSDATE;
+        INSERT INTO PROCESS_MONITOR VALUES L_REC RETURNING ID INTO L_RET;
+        COMMIT;
+        IF P_REQUEST IS NOT NULL OR P_RESPONCE IS NOT NULL THEN
+            INSERT INTO PROCESS_MONITOR_DETAIL (
+                PR_MON_ID,
+                REQUEST,
+                RESPONCE
+            ) VALUES (
+                L_RET,
+                P_REQUEST,
+                P_RESPONCE
+            );
+            COMMIT;
+        END IF;
+
+        RETURN L_RET;
+    END LOG_ERROR;
+
+    PROCEDURE ADD_LOG_DETAILS (
+        P_LOG_ID IN NUMBER,
+        P_KEY IN VARCHAR2,
+        P_VALUES IN VARCHAR2
+    ) AS
+        PRAGMA AUTONOMOUS_TRANSACTION;
+    BEGIN
+        INSERT INTO PROCESS_MONITOR_DETAIL (
+            PR_MON_ID,
+            PAR_KEY,
+            PAR_VALUE
+        ) VALUES (
+            P_LOG_ID,
+            P_KEY,
+            P_VALUES
+        );
+        COMMIT;
+    END ADD_LOG_DETAILS;
+
+    PROCEDURE ADD_LOG_CLOB (
+        P_LOG_ID IN NUMBER,
+        P_REQUEST IN CLOB DEFAULT NULL,
+        P_RESPONCE IN CLOB DEFAULT NULL
+    ) AS
+        PRAGMA AUTONOMOUS_TRANSACTION;
+    BEGIN
+        INSERT INTO PROCESS_MONITOR_DETAIL (
+            PR_MON_ID,
+            REQUEST,
+            RESPONCE
+        ) VALUES (
+            P_LOG_ID,
+            P_REQUEST,
+            P_RESPONCE
+        );
+        COMMIT;
+    END ADD_LOG_CLOB;
+END PLS_LOGGER;
+/
